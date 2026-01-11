@@ -106,7 +106,6 @@ let conn = null;
 let remotePlayer = null;
 let remotePlayerData = { x: 0, y: 0, z: 55, vy: 0, crashed: false, won: false };
 let localPlayerNum = 1;
-const PLAYER_X_OFFSET = 2.5; // Side-by-side offset for multiplayer
 let multiplayerCanRestart = false; // Only true when both players finished
 
 // --- Custom Shaders ---
@@ -1525,7 +1524,7 @@ function init() {
     rampShape.lineTo(0, 0);
 
     const rampGeo = new THREE.ExtrudeGeometry(rampShape, {
-        depth: 10, // Wider ramp to cover both players in multiplayer
+        depth: 4.5,
         bevelEnabled: true,
         bevelSize: 0.08,
         bevelThickness: 0.08,
@@ -1539,7 +1538,7 @@ function init() {
 
     ramp = new THREE.Mesh(rampGeo, rampMat);
     ramp.rotation.y = Math.PI / 2;
-    ramp.position.set(-5, 0, 10); // Centered to cover both player positions
+    ramp.position.set(-2.25, 0, 10);
     ramp.castShadow = true;
     ramp.receiveShadow = true;
     scene.add(ramp);
@@ -2589,9 +2588,6 @@ function animate(time) {
 
         player.position.add(playerVelocity.clone().multiplyScalar(delta));
 
-        // Keep player centered on track (no lateral movement)
-        player.position.x = 0;
-
         if (player.position.y < 0) {
             player.position.y = 0;
             playerVelocity.y = 0;
@@ -2604,8 +2600,7 @@ function animate(time) {
 
         // Ramp trigger
         if (!hasJumped && player.position.z < 14 && player.position.z > 8) {
-            // Wider trigger zone to accommodate side-by-side multiplayer (players at x = ±2.5)
-            if (Math.abs(player.position.x) < 5) {
+            if (Math.abs(player.position.x) < 2.5) {
                 isJumping = true;
                 hasJumped = true;
                 playerVelocity.y = JUMP_FORCE;
