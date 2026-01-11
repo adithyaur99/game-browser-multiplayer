@@ -107,6 +107,7 @@ let remotePlayer = null;
 let remotePlayerData = { x: 0, y: 0, z: 55, vy: 0, crashed: false, won: false };
 let localPlayerNum = 1;
 const PLAYER_X_OFFSET = 2.5; // Side-by-side offset for multiplayer
+let multiplayerCanRestart = false; // Only true when both players finished
 
 // --- Custom Shaders ---
 
@@ -1293,12 +1294,18 @@ function updateUI() {
     }
 }
 
-function showOverlay(title, message) {
+function showOverlay(title, message, isSuccess = false) {
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlay-title');
     const overlayMessage = document.getElementById('overlay-message');
     overlayTitle.textContent = title;
     overlayMessage.textContent = message;
+    // Add/remove success class for green styling
+    if (isSuccess) {
+        overlayTitle.classList.add('success');
+    } else {
+        overlayTitle.classList.remove('success');
+    }
     overlay.classList.remove('hidden');
 }
 
@@ -2357,18 +2364,30 @@ function checkMultiplayerEnd() {
     if (!isMultiplayer) return;
 
     const localWon = gameWon;
-    const localCrashed = gameOver && !gameWon;
+    const localCrashed = (gameOver && !gameWon) || gameFailed;
+    const localFinished = localWon || localCrashed;
     const remoteWon = remotePlayerData.won;
     const remoteCrashed = remotePlayerData.crashed;
+    const remoteFinished = remoteWon || remoteCrashed;
 
-    if (localWon && remoteWon) {
-        showOverlay('BOTH WIN!', 'Amazing teamwork! Press ENTER to restart');
-    } else if (localWon && remoteCrashed) {
-        showOverlay('YOU WIN!', 'Player ' + (localPlayerNum === 1 ? '2' : '1') + ' crashed! Press ENTER');
-    } else if (localCrashed && remoteWon) {
-        showOverlay('YOU LOSE!', 'Player ' + (localPlayerNum === 1 ? '2' : '1') + ' made it! Press ENTER');
-    } else if (localCrashed && remoteCrashed) {
-        showOverlay('BOTH CRASHED!', 'Try again! Press ENTER to restart');
+    // Both players finished - show final result and allow restart
+    if (localFinished && remoteFinished) {
+        multiplayerCanRestart = true;
+        if (localWon && remoteWon) {
+            showOverlay('BOTH WIN!', 'Amazing teamwork! Press ENTER to restart', true);
+        } else if (localWon && remoteCrashed) {
+            showOverlay('YOU WIN!', 'Player ' + (localPlayerNum === 1 ? '2' : '1') + ' crashed! Press ENTER', true);
+        } else if (localCrashed && remoteWon) {
+            showOverlay('YOU LOSE!', 'Player ' + (localPlayerNum === 1 ? '2' : '1') + ' made it! Press ENTER', false);
+        } else if (localCrashed && remoteCrashed) {
+            showOverlay('BOTH CRASHED!', 'Try again! Press ENTER to restart', false);
+        }
+    }
+    // Local player finished, waiting for remote - don't allow restart yet
+    else if (localFinished && !remoteFinished) {
+        multiplayerCanRestart = false;
+        const status = localWon ? 'SUCCESS!' : 'CRASHED!';
+        showOverlay(status, 'Waiting for Player ' + (localPlayerNum === 1 ? '2' : '1') + '...', localWon);
     }
 }
 
@@ -2389,6 +2408,8 @@ function onKeyDown(event) {
     if (event.code === 'Enter') {
         event.preventDefault();
         if (gameOver || gameWon || gameFailed) {
+            // In multiplayer, only restart when both players finished
+            if (isMultiplayer && !multiplayerCanRestart) return;
             resetGame();
         }
     }
@@ -2409,6 +2430,8 @@ function onTouchStart(event) {
 
     // If game is over, restart on tap
     if (gameOver || gameWon || gameFailed) {
+        // In multiplayer, only restart when both players finished
+        if (isMultiplayer && !multiplayerCanRestart) return;
         resetGame();
         return;
     }
@@ -2434,6 +2457,7 @@ function resetGame() {
     gameOver = false;
     gameWon = false;
     gameFailed = false;
+    multiplayerCanRestart = false;
 
     // Apply difficulty settings
     const settings = DIFFICULTY_SETTINGS[selectedDifficulty];
@@ -2586,7 +2610,7 @@ function animate(time) {
                 sendGameEvent('won');
                 checkMultiplayerEnd();
             } else {
-                showOverlay('SUCCESS!', 'You made it! Press ENTER to play again');
+                showOverlay('SUCCESS!', 'You made it! Press ENTER to play again', true);
             }
             updateUI();
         }
