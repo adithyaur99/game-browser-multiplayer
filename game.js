@@ -79,6 +79,15 @@ let bikeGroup = null;
 let riderGroup = null;
 let crashDebris = [];
 
+// Multiplayer state
+let isMultiplayer = false;
+let isHost = false;
+let peer = null;
+let conn = null;
+let remotePlayer = null;
+let remotePlayerData = { x: 0, y: 0, z: 55, vy: 0, crashed: false, won: false };
+let localPlayerNum = 1;
+
 // --- Custom Shaders ---
 
 // Sunny Swedish Sky Shader
@@ -2014,7 +2023,296 @@ function init() {
     // Start button click handler
     document.getElementById('start-btn').addEventListener('click', startGame);
 
+    // Multiplayer UI handlers
+    setupMultiplayerUI();
+
     requestAnimationFrame(animate);
+}
+
+// --- Multiplayer Functions ---
+function setupMultiplayerUI() {
+    const soloBtn = document.getElementById('solo-btn');
+    const multiplayerBtn = document.getElementById('multiplayer-btn');
+    const soloOptions = document.getElementById('solo-options');
+    const multiplayerOptions = document.getElementById('multiplayer-options');
+    const createRoomBtn = document.getElementById('create-room-btn');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    const roomCodeInput = document.getElementById('room-code-input');
+    const startMpBtn = document.getElementById('start-mp-btn');
+
+    soloBtn.addEventListener('click', () => {
+        isMultiplayer = false;
+        document.getElementById('mode-select').classList.add('hidden');
+        soloOptions.classList.remove('hidden');
+        multiplayerOptions.classList.add('hidden');
+    });
+
+    multiplayerBtn.addEventListener('click', () => {
+        isMultiplayer = true;
+        document.getElementById('mode-select').classList.add('hidden');
+        soloOptions.classList.add('hidden');
+        multiplayerOptions.classList.remove('hidden');
+    });
+
+    createRoomBtn.addEventListener('click', createRoom);
+    joinRoomBtn.addEventListener('click', () => joinRoom(roomCodeInput.value.toUpperCase()));
+
+    roomCodeInput.addEventListener('input', (e) => {
+        e.target.value = e.target.value.toUpperCase();
+    });
+
+    startMpBtn.addEventListener('click', startMultiplayerGame);
+}
+
+function generateRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 5; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+}
+
+function createRoom() {
+    const roomCode = generateRoomCode();
+
+    peer = new Peer('scania-' + roomCode);
+    isHost = true;
+    localPlayerNum = 1;
+
+    peer.on('open', (id) => {
+        document.getElementById('mp-lobby').classList.add('hidden');
+        document.getElementById('mp-waiting').classList.remove('hidden');
+        document.getElementById('room-code-display').textContent = roomCode;
+    });
+
+    peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnection();
+    });
+
+    peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        document.getElementById('connection-status').textContent = 'Error: ' + err.type;
+    });
+}
+
+function joinRoom(code) {
+    if (!code || code.length < 4) {
+        alert('Please enter a valid room code');
+        return;
+    }
+
+    peer = new Peer();
+    isHost = false;
+    localPlayerNum = 2;
+
+    peer.on('open', () => {
+        conn = peer.connect('scania-' + code);
+
+        conn.on('open', () => {
+            setupConnection();
+        });
+
+        conn.on('error', (err) => {
+            console.error('Connection error:', err);
+            alert('Failed to connect. Check the room code.');
+        });
+    });
+
+    peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        alert('Connection failed: ' + err.type);
+    });
+}
+
+function setupConnection() {
+    document.getElementById('mp-lobby').classList.add('hidden');
+    document.getElementById('mp-waiting').classList.add('hidden');
+    document.getElementById('mp-ready').classList.remove('hidden');
+
+    conn.on('data', (data) => {
+        handleNetworkData(data);
+    });
+
+    conn.on('close', () => {
+        console.log('Connection closed');
+        if (gameStarted) {
+            showOverlay('DISCONNECTED', 'Other player left');
+        }
+    });
+
+    // Send a handshake
+    conn.send({ type: 'handshake', playerNum: localPlayerNum });
+}
+
+function handleNetworkData(data) {
+    switch (data.type) {
+        case 'handshake':
+            console.log('Player ' + data.playerNum + ' connected');
+            break;
+        case 'playerUpdate':
+            remotePlayerData = data.state;
+            if (remotePlayer) {
+                remotePlayer.position.set(data.state.x, data.state.y, data.state.z);
+            }
+            break;
+        case 'startGame':
+            if (!isHost) {
+                selectedDifficulty = data.difficulty;
+                startMultiplayerGame();
+            }
+            break;
+        case 'gameEvent':
+            if (data.event === 'crashed') {
+                remotePlayerData.crashed = true;
+            } else if (data.event === 'won') {
+                remotePlayerData.won = true;
+                checkMultiplayerEnd();
+            }
+            break;
+    }
+}
+
+function sendPlayerUpdate() {
+    if (conn && conn.open) {
+        conn.send({
+            type: 'playerUpdate',
+            state: {
+                x: player.position.x,
+                y: player.position.y,
+                z: player.position.z,
+                vy: playerVelocity.y,
+                crashed: gameOver,
+                won: gameWon
+            }
+        });
+    }
+}
+
+function sendGameEvent(event) {
+    if (conn && conn.open) {
+        conn.send({ type: 'gameEvent', event: event });
+    }
+}
+
+function startMultiplayerGame() {
+    if (isHost && conn && conn.open) {
+        conn.send({ type: 'startGame', difficulty: selectedDifficulty });
+    }
+
+    // Create remote player (different color motorcycle)
+    createRemotePlayer();
+
+    // Start the game
+    startGame();
+}
+
+function createRemotePlayer() {
+    // Create a simple representation of the other player
+    remotePlayer = new THREE.Group();
+
+    // Simple motorcycle shape for remote player
+    const bodyMat = new THREE.MeshStandardMaterial({
+        color: localPlayerNum === 1 ? 0xff4444 : 0x4444ff,
+        metalness: 0.6,
+        roughness: 0.3
+    });
+
+    // Body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.6, 1.8),
+        bodyMat
+    );
+    body.position.y = 0.6;
+    remotePlayer.add(body);
+
+    // Wheels
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const frontWheel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.35, 0.2, 16),
+        wheelMat
+    );
+    frontWheel.rotation.x = Math.PI / 2;
+    frontWheel.position.set(0, 0.35, -0.6);
+    remotePlayer.add(frontWheel);
+
+    const rearWheel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.35, 0.2, 16),
+        wheelMat
+    );
+    rearWheel.rotation.x = Math.PI / 2;
+    rearWheel.position.set(0, 0.35, 0.6);
+    remotePlayer.add(rearWheel);
+
+    // Rider
+    const riderMat = new THREE.MeshStandardMaterial({
+        color: localPlayerNum === 1 ? 0xaa2222 : 0x2222aa
+    });
+    const riderBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.7, 0.4),
+        riderMat
+    );
+    riderBody.position.set(0, 1.2, 0.1);
+    remotePlayer.add(riderBody);
+
+    // Head
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xffcc99 })
+    );
+    head.position.set(0, 1.7, 0);
+    remotePlayer.add(head);
+
+    // Helmet
+    const helmet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 12, 12),
+        riderMat
+    );
+    helmet.position.set(0, 1.75, 0);
+    helmet.scale.set(1, 0.9, 1.1);
+    remotePlayer.add(helmet);
+
+    // Player label
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = localPlayerNum === 1 ? '#ff4444' : '#4444ff';
+    ctx.fillRect(0, 0, 128, 64);
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('P' + (localPlayerNum === 1 ? '2' : '1'), 64, 45);
+
+    const labelTexture = new THREE.CanvasTexture(canvas);
+    const labelMat = new THREE.SpriteMaterial({ map: labelTexture });
+    const label = new THREE.Sprite(labelMat);
+    label.position.set(0, 2.5, 0);
+    label.scale.set(1, 0.5, 1);
+    remotePlayer.add(label);
+
+    remotePlayer.position.set(0, 0, 55);
+    scene.add(remotePlayer);
+}
+
+function checkMultiplayerEnd() {
+    if (!isMultiplayer) return;
+
+    const localWon = gameWon;
+    const localCrashed = gameOver && !gameWon;
+    const remoteWon = remotePlayerData.won;
+    const remoteCrashed = remotePlayerData.crashed;
+
+    if (localWon && remoteWon) {
+        showOverlay('BOTH WIN!', 'Amazing teamwork! Press ENTER to restart');
+    } else if (localWon && remoteCrashed) {
+        showOverlay('YOU WIN!', 'Player ' + (localPlayerNum === 1 ? '2' : '1') + ' crashed! Press ENTER');
+    } else if (localCrashed && remoteWon) {
+        showOverlay('YOU LOSE!', 'Player ' + (localPlayerNum === 1 ? '2' : '1') + ' made it! Press ENTER');
+    } else if (localCrashed && remoteCrashed) {
+        showOverlay('BOTH CRASHED!', 'Try again! Press ENTER to restart');
+    }
 }
 
 function onWindowResize() {
@@ -2073,6 +2371,15 @@ function resetGame() {
     startTime = Date.now();
     elapsedTime = 0;
 
+    // Reset multiplayer state
+    if (isMultiplayer) {
+        remotePlayerData = { x: 0, y: 0, z: 55, vy: 0, crashed: false, won: false };
+        if (remotePlayer) {
+            remotePlayer.position.set(0, 0, 55);
+            remotePlayer.visible = true;
+        }
+    }
+
     // Spawn trucks based on difficulty - closer spawn = less reaction time
     const spawnDist = settings.spawnDistance;
     trucks.push(new Truck(1, 0, -spawnDist));
@@ -2129,7 +2436,12 @@ function animate(time) {
             } else {
                 // Jumped too early or too late - immediate fail
                 gameFailed = true;
-                showOverlay('FAILED', 'Bad timing! Press ENTER to restart');
+                if (isMultiplayer) {
+                    sendGameEvent('crashed');
+                    checkMultiplayerEnd();
+                } else {
+                    showOverlay('FAILED', 'Bad timing! Press ENTER to restart');
+                }
             }
         }
 
@@ -2180,7 +2492,12 @@ function animate(time) {
                 bestTime = elapsedTime;
                 localStorage.setItem('bestTime', bestTime.toString());
             }
-            showOverlay('SUCCESS!', 'You made it! Press ENTER to play again');
+            if (isMultiplayer) {
+                sendGameEvent('won');
+                checkMultiplayerEnd();
+            } else {
+                showOverlay('SUCCESS!', 'You made it! Press ENTER to play again');
+            }
             updateUI();
         }
     }
@@ -2198,7 +2515,12 @@ function animate(time) {
                 gameOver = true;
                 // Trigger realistic crash physics
                 initCrash(truck.getDirection(), TRUCK_SPEED);
-                showOverlay('CRASHED!', 'Press ENTER to restart');
+                if (isMultiplayer) {
+                    sendGameEvent('crashed');
+                    checkMultiplayerEnd();
+                } else {
+                    showOverlay('CRASHED!', 'Press ENTER to restart');
+                }
                 updateUI();
                 break;
             }
@@ -2208,6 +2530,18 @@ function animate(time) {
     // Update crash physics if crash occurred
     if (crashState) {
         updateCrashPhysics(delta);
+    }
+
+    // Multiplayer updates
+    if (isMultiplayer) {
+        // Send local player position to remote
+        sendPlayerUpdate();
+
+        // Update remote player visual position (already handled in handleNetworkData)
+        // Make remote player visible/invisible based on crash state
+        if (remotePlayer) {
+            remotePlayer.visible = !remotePlayerData.crashed;
+        }
     }
 
     // Camera
