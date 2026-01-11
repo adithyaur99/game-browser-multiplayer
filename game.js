@@ -696,24 +696,25 @@ function cleanupCrash() {
     player.visible = true;
 }
 
-// --- Realistic Semi-Truck ---
+// --- Sleek Modern Semi-Truck ---
 class Truck {
     constructor(direction, laneOffset = 0, startX = null) {
         this.direction = direction;
         this.mesh = new THREE.Group();
 
-        // === MATERIALS ===
+        // === MATERIALS - Glossy and Premium ===
         const navyBlue = new THREE.MeshStandardMaterial({
-            color: 0x1a2a4a,
-            roughness: 0.25,
-            metalness: 0.7,
+            color: 0x0a1628,
+            roughness: 0.15,
+            metalness: 0.85,
             envMap: envMap,
+            envMapIntensity: 1.2,
         });
 
-        const scaniaGrey = new THREE.MeshStandardMaterial({
-            color: 0x8a9aaa,
-            roughness: 0.3,
-            metalness: 0.5,
+        const navyBlueLight = new THREE.MeshStandardMaterial({
+            color: 0x1a3050,
+            roughness: 0.2,
+            metalness: 0.8,
             envMap: envMap,
         });
 
@@ -725,335 +726,445 @@ class Truck {
         const scaniaLogoMat = new THREE.MeshStandardMaterial({
             map: scaniaLogoTexture,
             transparent: true,
-            roughness: 0.3,
-            metalness: 0.3,
+            roughness: 0.2,
+            metalness: 0.4,
         });
 
         const chrome = new THREE.MeshStandardMaterial({
-            color: 0xeeeeee,
+            color: 0xffffff,
+            roughness: 0.05,
+            metalness: 1.0,
+            envMap: envMap,
+            envMapIntensity: 1.5,
+        });
+
+        const darkChrome = new THREE.MeshStandardMaterial({
+            color: 0x333340,
             roughness: 0.1,
-            metalness: 0.9,
+            metalness: 0.95,
             envMap: envMap,
         });
 
-        const blackPlastic = new THREE.MeshStandardMaterial({
-            color: 0x1a1a1a,
-            roughness: 0.8,
-            metalness: 0.1,
+        const blackGloss = new THREE.MeshStandardMaterial({
+            color: 0x0a0a0a,
+            roughness: 0.2,
+            metalness: 0.6,
         });
 
         const rubber = new THREE.MeshStandardMaterial({
-            color: 0x111111,
-            roughness: 0.95,
+            color: 0x1a1a1a,
+            roughness: 0.9,
             metalness: 0.0,
         });
 
         const glass = new THREE.MeshStandardMaterial({
-            color: 0x88aacc,
-            roughness: 0.1,
-            metalness: 0.3,
+            color: 0x1a2a3a,
+            roughness: 0.0,
+            metalness: 0.5,
             transparent: true,
-            opacity: 0.6,
+            opacity: 0.7,
+            envMap: envMap,
+            envMapIntensity: 2.0,
         });
 
         const headlightMat = new THREE.MeshStandardMaterial({
-            color: 0xffffee,
-            emissive: 0xffffcc,
-            emissiveIntensity: 1.5,
+            color: 0xffffff,
+            emissive: 0xffffee,
+            emissiveIntensity: 2.0,
+            roughness: 0.0,
+        });
+
+        const ledStripMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xaaccff,
+            emissiveIntensity: 1.0,
         });
 
         const tailLightMat = new THREE.MeshStandardMaterial({
             color: 0xff0000,
-            emissive: 0xaa0000,
-            emissiveIntensity: 1.0,
+            emissive: 0xff0000,
+            emissiveIntensity: 1.5,
         });
 
-        const trailerWhite = new THREE.MeshStandardMaterial({
-            color: 0xf5f5f5,
-            roughness: 0.4,
-            metalness: 0.2,
-            envMap: envMap,
-        });
-
-        // === CAB (European flat-front style - Navy Blue Scania) ===
+        // === SLEEK CAB - Proper 3D Design ===
         const cabGroup = new THREE.Group();
-        cabGroup.position.set(14, 0, 0);
+        cabGroup.position.set(13, 0, 0);
         this.mesh.add(cabGroup);
 
+        // Lower cab section (engine/base area)
+        const cabLower = new THREE.Mesh(
+            new THREE.BoxGeometry(4.0, 1.5, 2.6),
+            navyBlue
+        );
+        cabLower.position.set(0, 1.25, 0);
+        cabLower.castShadow = true;
+        cabGroup.add(cabLower);
+
         // Main cab body
-        const cabGeo = new THREE.BoxGeometry(3.5, 3.5, 2.5);
-        const cab = new THREE.Mesh(cabGeo, navyBlue);
-        cab.position.set(0, 2.75, 0);
-        cab.castShadow = true;
-        cabGroup.add(cab);
+        const cabMain = new THREE.Mesh(
+            new THREE.BoxGeometry(3.8, 2.8, 2.6),
+            navyBlue
+        );
+        cabMain.position.set(-0.1, 3.4, 0);
+        cabMain.castShadow = true;
+        cabGroup.add(cabMain);
 
-        // Cab roof
-        const roofGeo = new THREE.BoxGeometry(3.2, 0.4, 2.4);
-        const roof = new THREE.Mesh(roofGeo, navyBlue);
-        roof.position.set(-0.1, 4.7, 0);
-        roof.castShadow = true;
-        cabGroup.add(roof);
+        // Windshield area - angled front top
+        const windshieldFrame = new THREE.Mesh(
+            new THREE.BoxGeometry(1.0, 2.0, 2.5),
+            navyBlue
+        );
+        windshieldFrame.position.set(1.6, 3.0, 0);
+        windshieldFrame.rotation.z = -0.25;
+        cabGroup.add(windshieldFrame);
 
-        // Roof spoiler/fairing
-        const spoilerGeo = new THREE.BoxGeometry(2.0, 1.5, 2.3);
-        const spoiler = new THREE.Mesh(spoilerGeo, navyBlue);
-        spoiler.position.set(-0.5, 5.6, 0);
-        spoiler.castShadow = true;
-        cabGroup.add(spoiler);
+        // Roof fairing - matches trailer height smoothly
+        const roofFairing = new THREE.Mesh(
+            new THREE.BoxGeometry(3.5, 2.8, 2.6),
+            navyBlue
+        );
+        roofFairing.position.set(-0.3, 6.2, 0);
+        roofFairing.castShadow = true;
+        cabGroup.add(roofFairing);
 
-        // Windshield
-        const windshieldGeo = new THREE.PlaneGeometry(2.2, 1.8);
-        const windshield = new THREE.Mesh(windshieldGeo, glass);
-        windshield.position.set(1.5, 3.5, 0);
+        // Fairing front slope
+        const fairingSlope = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 2.0, 2.55),
+            navyBlue
+        );
+        fairingSlope.position.set(1.2, 5.5, 0);
+        fairingSlope.rotation.z = -0.4;
+        cabGroup.add(fairingSlope);
+
+        // Windshield glass
+        const windshield = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.2, 2.4),
+            glass
+        );
+        windshield.position.set(1.85, 3.5, 0);
         windshield.rotation.y = Math.PI / 2;
-        windshield.rotation.z = -0.15;
+        windshield.rotation.z = -0.25;
         cabGroup.add(windshield);
 
         // Side windows
         [-1, 1].forEach(side => {
             const sideWin = new THREE.Mesh(
-                new THREE.PlaneGeometry(1.8, 1.2),
+                new THREE.PlaneGeometry(2.5, 1.6),
                 glass
             );
-            sideWin.position.set(0, 3.6, side * 1.26);
+            sideWin.position.set(0, 3.6, side * 1.31);
             sideWin.rotation.y = side * Math.PI / 2;
             cabGroup.add(sideWin);
         });
 
-        // Grille - Scania style with V8 badge area
-        const grilleGeo = new THREE.BoxGeometry(0.1, 1.5, 2.0);
-        const grille = new THREE.Mesh(grilleGeo, chrome);
-        grille.position.set(1.8, 1.8, 0);
-        cabGroup.add(grille);
-
-        // Scania grille badge (chrome V shape)
-        const badgeLeft = new THREE.Mesh(
-            new THREE.BoxGeometry(0.08, 0.5, 0.08),
-            chrome
-        );
-        badgeLeft.position.set(1.85, 2.6, -0.15);
-        badgeLeft.rotation.x = 0.3;
-        cabGroup.add(badgeLeft);
-
-        const badgeRight = new THREE.Mesh(
-            new THREE.BoxGeometry(0.08, 0.5, 0.08),
-            chrome
-        );
-        badgeRight.position.set(1.85, 2.6, 0.15);
-        badgeRight.rotation.x = -0.3;
-        cabGroup.add(badgeRight);
-
-        // Bumper
-        const bumperGeo = new THREE.BoxGeometry(0.4, 0.5, 2.6);
-        const bumper = new THREE.Mesh(bumperGeo, chrome);
-        bumper.position.set(1.95, 0.7, 0);
-        cabGroup.add(bumper);
-
-        // Headlights
+        // Headlights - integrated into front
         [-0.9, 0.9].forEach(side => {
-            const hl = new THREE.Mesh(
-                new THREE.BoxGeometry(0.1, 0.4, 0.5),
+            const hlUnit = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, 0.4, 0.6),
+                blackGloss
+            );
+            hlUnit.position.set(2.0, 1.8, side);
+            cabGroup.add(hlUnit);
+
+            const hlLed = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.3, 0.5),
                 headlightMat
             );
-            hl.position.set(1.81, 2.5, side);
-            cabGroup.add(hl);
+            hlLed.position.set(2.05, 1.8, side);
+            cabGroup.add(hlLed);
         });
 
-        // Side mirrors
-        [-1, 1].forEach(side => {
-            const mirrorArm = new THREE.Mesh(
-                new THREE.BoxGeometry(0.4, 0.05, 0.05),
-                blackPlastic
+        // Grille
+        const grille = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 1.0, 1.8),
+            darkChrome
+        );
+        grille.position.set(2.0, 1.5, 0);
+        cabGroup.add(grille);
+
+        // Chrome grille bars
+        for (let i = -0.7; i <= 0.7; i += 0.2) {
+            const bar = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.06, 1.6),
+                chrome
             );
-            mirrorArm.position.set(1.2, 4.0, side * 1.5);
-            cabGroup.add(mirrorArm);
+            bar.position.set(2.03, 1.5 + i, 0);
+            cabGroup.add(bar);
+        }
+
+        // Bumper
+        const bumper = new THREE.Mesh(
+            new THREE.BoxGeometry(0.25, 0.4, 2.7),
+            chrome
+        );
+        bumper.position.set(2.1, 0.5, 0);
+        cabGroup.add(bumper);
+
+        // Side mirrors on stalks
+        [-1, 1].forEach(side => {
+            const stalk = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 0.08, 0.08),
+                blackGloss
+            );
+            stalk.position.set(1.5, 4.2, side * 1.5);
+            cabGroup.add(stalk);
 
             const mirror = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.5, 0.3),
-                blackPlastic
+                new THREE.BoxGeometry(0.1, 0.5, 0.3),
+                blackGloss
             );
-            mirror.position.set(1.4, 3.8, side * 1.55);
+            mirror.position.set(1.8, 4.0, side * 1.55);
             cabGroup.add(mirror);
         });
 
-        // === SCANIA BRANDING ON CAB SIDES ===
-        [-1, 1].forEach(side => {
-            // "SCANIA" text representation (silver/grey stripe)
-            const scaniaStripe = new THREE.Mesh(
-                new THREE.PlaneGeometry(2.0, 0.3),
-                scaniaGrey
-            );
-            scaniaStripe.position.set(0, 4.2, side * 1.26);
-            scaniaStripe.rotation.y = side * Math.PI / 2;
-            cabGroup.add(scaniaStripe);
-        });
-
-        // Fuel tanks (under cab)
+        // Side fuel tanks
         [-1, 1].forEach(side => {
             const tank = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.35, 0.35, 1.5, 12),
+                new THREE.CylinderGeometry(0.4, 0.4, 2.0, 20),
                 chrome
             );
             tank.rotation.z = Math.PI / 2;
-            tank.position.set(12.5, 1.3, side * 1.5);
+            tank.position.set(11, 1.0, side * 1.45);
             this.mesh.add(tank);
         });
 
-        // === TRAILER WITH GAP IN MIDDLE ===
-        const trailerHeight = 5.5; // Taller trailer
-        const trailerWidth = 2.5;
-        const sectionLength = 6; // Smaller sections
-        const gapWidth = GAP_SIZE; // Gap in middle for motorcycle to jump through
+        // Cab side panels (aero skirts)
+        [-1, 1].forEach(side => {
+            const skirt = new THREE.Mesh(
+                new THREE.BoxGeometry(3.5, 1.0, 0.08),
+                navyBlueLight
+            );
+            skirt.position.set(0, 0.7, side * 1.32);
+            cabGroup.add(skirt);
+        });
 
-        // Front trailer section (closer to cab) - Navy blue Scania
-        const frontTrailerGeo = new THREE.BoxGeometry(sectionLength, trailerHeight, trailerWidth);
-        const frontTrailer = new THREE.Mesh(frontTrailerGeo, navyBlue);
-        frontTrailer.position.set(9, trailerHeight / 2 + 1.5, 0); // Moved further apart
+        // Chrome trim line
+        [-1, 1].forEach(side => {
+            const trim = new THREE.Mesh(
+                new THREE.BoxGeometry(3.8, 0.06, 0.02),
+                chrome
+            );
+            trim.position.set(-0.1, 2.0, side * 1.31);
+            cabGroup.add(trim);
+        });
+
+        // Steps
+        [-1, 1].forEach(side => {
+            const step = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 0.08, 0.3),
+                chrome
+            );
+            step.position.set(0.5, 0.8, side * 1.4);
+            cabGroup.add(step);
+        });
+
+        // === SLEEK TRAILER WITH GAP ===
+        const trailerHeight = 5.5;
+        const trailerWidth = 2.6;
+        const sectionLength = 7;
+
+        // Front trailer section - smooth panels
+        const frontTrailer = new THREE.Mesh(
+            new THREE.BoxGeometry(sectionLength, trailerHeight, trailerWidth),
+            navyBlue
+        );
+        frontTrailer.position.set(8, trailerHeight / 2 + 1.5, 0);
         frontTrailer.castShadow = true;
         frontTrailer.receiveShadow = true;
         this.mesh.add(frontTrailer);
 
-        // Back trailer section - Navy blue Scania
-        const backTrailerGeo = new THREE.BoxGeometry(sectionLength, trailerHeight, trailerWidth);
-        const backTrailer = new THREE.Mesh(backTrailerGeo, navyBlue);
-        backTrailer.position.set(-9, trailerHeight / 2 + 1.5, 0); // Moved further apart
+        // Front section rounded top edges
+        const frontTopEdge = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.15, 0.15, sectionLength, 16, 1, false, 0, Math.PI),
+            navyBlue
+        );
+        frontTopEdge.rotation.z = Math.PI / 2;
+        frontTopEdge.position.set(8, trailerHeight + 1.5, 0);
+        this.mesh.add(frontTopEdge);
+
+        // Back trailer section
+        const backTrailer = new THREE.Mesh(
+            new THREE.BoxGeometry(sectionLength, trailerHeight, trailerWidth),
+            navyBlue
+        );
+        backTrailer.position.set(-8, trailerHeight / 2 + 1.5, 0);
         backTrailer.castShadow = true;
         backTrailer.receiveShadow = true;
         this.mesh.add(backTrailer);
 
-        // Continuous roof spanning the entire trailer (including gap)
-        const fullRoof = new THREE.Mesh(
-            new THREE.BoxGeometry(24, 0.2, trailerWidth),
+        // Back section rounded top edges
+        const backTopEdge = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.15, 0.15, sectionLength, 16, 1, false, 0, Math.PI),
             navyBlue
         );
-        fullRoof.position.set(0, trailerHeight + 1.5, 0);
+        backTopEdge.rotation.z = Math.PI / 2;
+        backTopEdge.position.set(-8, trailerHeight + 1.5, 0);
+        this.mesh.add(backTopEdge);
+
+        // Sleek continuous roof over gap
+        const fullRoof = new THREE.Mesh(
+            new THREE.BoxGeometry(22, 0.15, trailerWidth),
+            navyBlue
+        );
+        fullRoof.position.set(0, trailerHeight + 1.58, 0);
         fullRoof.castShadow = true;
         this.mesh.add(fullRoof);
 
-        // Chrome trim on top of roof
-        const roofTrim = new THREE.Mesh(
-            new THREE.BoxGeometry(24.1, 0.08, trailerWidth + 0.1),
-            chrome
-        );
-        roofTrim.position.set(0, trailerHeight + 1.64, 0);
-        this.mesh.add(roofTrim);
+        // Chrome roof rail trim
+        [-1, 1].forEach(side => {
+            const roofRail = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.04, 0.04, 22),
+                chrome
+            );
+            roofRail.rotation.z = Math.PI / 2;
+            roofRail.position.set(0, trailerHeight + 1.7, side * (trailerWidth / 2 - 0.1));
+            this.mesh.add(roofRail);
+        });
 
-        // === SCANIA BRANDING (BIGGER) ===
-        [9, -9].forEach(xPos => {
+        // === BIGGER SCANIA BRANDING ===
+        [8, -8].forEach(xPos => {
             [-1, 1].forEach(side => {
-                // Scania logo on trailer sides - big
+                // Large Scania logo - BIGGER
                 const logo = new THREE.Mesh(
-                    new THREE.PlaneGeometry(7.0, 4.0),
+                    new THREE.PlaneGeometry(9.0, 5.0),
                     scaniaLogoMat
                 );
-                logo.position.set(xPos, 3.0, (trailerWidth / 2 + 0.02) * side);
+                logo.position.set(xPos, 4.2, (trailerWidth / 2 + 0.02) * side);
                 logo.rotation.y = side < 0 ? Math.PI : 0;
                 this.mesh.add(logo);
             });
         });
 
-        // Panel lines on both trailer sections
-        [9, -9].forEach(xPos => {
+        // Sleek chrome trim lines on trailer sides
+        [8, -8].forEach(xPos => {
             [-1, 1].forEach(side => {
-                for (let i = 0; i < 2; i++) {
-                    const line = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.03, trailerHeight - 0.2, 0.01),
-                        blackPlastic
-                    );
-                    line.position.set(xPos + (i - 0.5) * 2.5, trailerHeight / 2 + 1.5, (trailerWidth / 2 + 0.04) * side);
-                    this.mesh.add(line);
-                }
+                // Horizontal chrome accent
+                const trimLine = new THREE.Mesh(
+                    new THREE.BoxGeometry(sectionLength - 0.5, 0.06, 0.02),
+                    chrome
+                );
+                trimLine.position.set(xPos, 2.0, side * (trailerWidth / 2 + 0.01));
+                this.mesh.add(trimLine);
+
+                // Lower accent line
+                const trimLine2 = new THREE.Mesh(
+                    new THREE.BoxGeometry(sectionLength - 0.5, 0.04, 0.02),
+                    chrome
+                );
+                trimLine2.position.set(xPos, 6.8, side * (trailerWidth / 2 + 0.01));
+                this.mesh.add(trimLine2);
             });
         });
 
-        // Undercarriage/frame running through the gap
-        const frameGeo = new THREE.BoxGeometry(28, 0.25, 0.8);
-        const frame = new THREE.Mesh(frameGeo, blackPlastic);
-        frame.position.set(0, 1.4, 0);
-        this.mesh.add(frame);
-
-        // Cross beams in the gap (visible structure)
-        for (let x = -1.5; x <= 1.5; x += 1.5) {
-            const crossBeam = new THREE.Mesh(
-                new THREE.BoxGeometry(0.15, 0.2, trailerWidth - 0.4),
-                blackPlastic
-            );
-            crossBeam.position.set(x, 1.5, 0);
-            this.mesh.add(crossBeam);
-        }
-
-        // Side skirts (on the solid sections only) - Navy blue
+        // Aerodynamic side skirts (full length)
         [-1, 1].forEach(side => {
-            // Front section skirt
+            // Front skirt
             const skirtFront = new THREE.Mesh(
-                new THREE.BoxGeometry(sectionLength - 0.5, 0.5, 0.05),
-                navyBlue
+                new THREE.BoxGeometry(sectionLength, 0.8, 0.06),
+                navyBlueLight
             );
-            skirtFront.position.set(9, 1.0, side * (trailerWidth / 2));
+            skirtFront.position.set(8, 1.0, side * (trailerWidth / 2 + 0.03));
             this.mesh.add(skirtFront);
 
-            // Back section skirt
+            // Back skirt
             const skirtBack = new THREE.Mesh(
-                new THREE.BoxGeometry(sectionLength - 0.5, 0.5, 0.05),
-                navyBlue
+                new THREE.BoxGeometry(sectionLength, 0.8, 0.06),
+                navyBlueLight
             );
-            skirtBack.position.set(-9, 1.0, side * (trailerWidth / 2));
+            skirtBack.position.set(-8, 1.0, side * (trailerWidth / 2 + 0.03));
             this.mesh.add(skirtBack);
         });
 
-        // Rear doors - Navy blue
-        const doorGeo = new THREE.BoxGeometry(0.1, trailerHeight - 0.3, trailerWidth - 0.2);
-        const doors = new THREE.Mesh(doorGeo, navyBlue);
-        doors.position.set(-12.05, trailerHeight / 2 + 1.5, 0);
-        this.mesh.add(doors);
+        // Undercarriage frame
+        const frame = new THREE.Mesh(
+            new THREE.BoxGeometry(26, 0.2, 0.6),
+            blackGloss
+        );
+        frame.position.set(0, 1.4, 0);
+        this.mesh.add(frame);
 
-        // Scania logo on rear doors - fitted to vertical logo
+        // Cross beams in gap
+        for (let x = -2; x <= 2; x += 2) {
+            const crossBeam = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.15, trailerWidth - 0.6),
+                blackGloss
+            );
+            crossBeam.position.set(x, 1.45, 0);
+            this.mesh.add(crossBeam);
+        }
+
+        // Rear doors with modern design
+        const doorPanel = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, trailerHeight - 0.2, trailerWidth - 0.1),
+            navyBlue
+        );
+        doorPanel.position.set(-11.55, trailerHeight / 2 + 1.5, 0);
+        this.mesh.add(doorPanel);
+
+        // Rear logo - bigger
         const rearLogo = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.6, 1.8),
+            new THREE.PlaneGeometry(2.0, 2.2),
             scaniaLogoMat
         );
-        rearLogo.position.set(-12.1, 3.2, 0);
+        rearLogo.position.set(-11.6, 4.5, 0);
         rearLogo.rotation.y = -Math.PI / 2;
         this.mesh.add(rearLogo);
 
-        // Door handles
-        [-0.6, 0.6].forEach(side => {
-            const handle = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.3, 0.08),
-                chrome
+        // Modern LED tail lights
+        [-1, 1].forEach(side => {
+            // LED strip tail light
+            const tailStrip = new THREE.Mesh(
+                new THREE.BoxGeometry(0.06, 0.8, 0.15),
+                tailLightMat
             );
-            handle.position.set(-12.15, 3.5, side);
-            this.mesh.add(handle);
+            tailStrip.position.set(-11.58, 3.5, side * 1.1);
+            this.mesh.add(tailStrip);
+
+            // Reflector
+            const reflector = new THREE.Mesh(
+                new THREE.BoxGeometry(0.04, 0.3, 0.3),
+                new THREE.MeshStandardMaterial({ color: 0xff3300, emissive: 0x330000 })
+            );
+            reflector.position.set(-11.58, 2.2, side * 1.0);
+            this.mesh.add(reflector);
         });
 
-        // === WHEELS ===
+        // Chrome rear bumper
+        const rearBumper = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.3, 2.5),
+            chrome
+        );
+        rearBumper.position.set(-11.55, 0.65, 0);
+        this.mesh.add(rearBumper);
+
+        // === WHEELS - Low profile, sporty ===
         const createWheel = (x, z, isDouble = false) => {
             const wheelGroup = new THREE.Group();
-            const radius = 0.5;
+            const radius = 0.52;
 
             const addWheel = (zOffset) => {
-                // Tire
+                // Low profile tire
                 const tire = new THREE.Mesh(
-                    new THREE.CylinderGeometry(radius, radius, 0.35, 24),
+                    new THREE.TorusGeometry(radius, 0.15, 16, 32),
                     rubber
                 );
-                tire.rotation.x = Math.PI / 2;
+                tire.rotation.y = Math.PI / 2;
                 tire.position.z = zOffset;
                 wheelGroup.add(tire);
 
-                // Rim
+                // Sporty alloy rim
                 const rim = new THREE.Mesh(
-                    new THREE.CylinderGeometry(radius * 0.5, radius * 0.5, 0.36, 16),
+                    new THREE.CylinderGeometry(radius - 0.1, radius - 0.1, 0.28, 32),
                     chrome
                 );
                 rim.rotation.x = Math.PI / 2;
                 rim.position.z = zOffset;
                 wheelGroup.add(rim);
 
-                // Hub cap
+                // Hub with Scania logo area
                 const hub = new THREE.Mesh(
-                    new THREE.CylinderGeometry(radius * 0.2, radius * 0.15, 0.38, 12),
-                    chrome
+                    new THREE.CylinderGeometry(0.15, 0.15, 0.3, 24),
+                    darkChrome
                 );
                 hub.rotation.x = Math.PI / 2;
                 hub.position.z = zOffset;
@@ -1061,8 +1172,8 @@ class Truck {
             };
 
             if (isDouble) {
-                addWheel(-0.2);
-                addWheel(0.2);
+                addWheel(-0.22);
+                addWheel(0.22);
             } else {
                 addWheel(0);
             }
@@ -1071,59 +1182,19 @@ class Truck {
             this.mesh.add(wheelGroup);
         };
 
-        // Front steer axle (single wheels)
-        createWheel(15, 1.1, false);
-        createWheel(15, -1.1, false);
+        // Front steer axle
+        createWheel(15.2, 1.15, false);
+        createWheel(15.2, -1.15, false);
 
-        // Drive axle (dual wheels)
-        createWheel(11.5, 1.1, true);
-        createWheel(11.5, -1.1, true);
+        // Drive axles
+        createWheel(11.8, 1.15, true);
+        createWheel(11.8, -1.15, true);
 
-        // Trailer axles (dual wheels, tandem) - positioned under back trailer section
-        createWheel(-9, 1.1, true);
-        createWheel(-9, -1.1, true);
-        createWheel(-11, 1.1, true);
-        createWheel(-11, -1.1, true);
-
-        // Wheel fenders
-        [-9, -11].forEach(x => {
-            [-1, 1].forEach(side => {
-                const fender = new THREE.Mesh(
-                    new THREE.BoxGeometry(1.0, 0.4, 0.08),
-                    blackPlastic
-                );
-                fender.position.set(x, 1.1, side * (trailerWidth / 2 + 0.04));
-                this.mesh.add(fender);
-            });
-        });
-
-        // === REAR LIGHTS ===
-        [-0.8, 0.8].forEach(side => {
-            const light = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.3, 0.4),
-                tailLightMat
-            );
-            light.position.set(-12.15, 2.2, side);
-            this.mesh.add(light);
-        });
-
-        // Rear bumper
-        const rearBumper = new THREE.Mesh(
-            new THREE.BoxGeometry(0.15, 0.25, 2.3),
-            chrome
-        );
-        rearBumper.position.set(-12.1, 0.7, 0);
-        this.mesh.add(rearBumper);
-
-        // Mud flaps
-        [-0.8, 0.8].forEach(side => {
-            const flap = new THREE.Mesh(
-                new THREE.BoxGeometry(0.02, 0.4, 0.35),
-                rubber
-            );
-            flap.position.set(-11.5, 0.5, side);
-            this.mesh.add(flap);
-        });
+        // Trailer axles
+        createWheel(-8.5, 1.15, true);
+        createWheel(-8.5, -1.15, true);
+        createWheel(-10.5, 1.15, true);
+        createWheel(-10.5, -1.15, true);
 
         // === ORIENTATION & POSITION ===
         if (direction === -1) {
