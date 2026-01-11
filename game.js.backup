@@ -1,0 +1,779 @@
+/**
+ * Main entry point - GTA-Style Truck Jump Game
+ */
+import { Engine } from './core/Engine.js';
+
+// Create and initialize engine
+const engine = new Engine();
+
+async function main() {
+    try {
+        await engine.init();
+
+        // Setup restart handler
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyR' && engine.gameOver) {
+                engine.reset();
+            }
+        });
+
+        // Start game loop
+        engine.start();
+
+        console.log('🎮 Game started! Hold SPACE to accelerate.');
+    } catch (error) {
+        console.error('❌ Failed to initialize game:', error);
+    }
+}
+
+main();
+
+const GROUND_COLOR = 0x1a1a1a; // Dark Asphalt
+const GRASS_COLOR = 0x2d4a1e; // Deep Green (Pine forest floor)
+const TRUCK_BLUE = 0x0066cc; // Scania Blue
+const TRUCK_RED = 0xcc0000; // Red accents
+const TRUCK_SPEED = 18;
+const PLAYER_ACCEL = 40;
+const PLAYER_MAX_SPEED = 35;
+const PLAYER_DRAG = 15;
+const GRAVITY = 40;
+const JUMP_FORCE = 18;
+const RAMP_BLUE = 0x0055ff;
+
+// --- Globals ---
+let scene, camera, renderer, composer;
+let player;
+let trucks = [];
+let ramp;
+let lastTime = 0;
+
+// State
+let playerVelocity = new THREE.Vector3(0, 0, 0);
+let isAccelerating = false;
+let isJumping = false;
+let hasJumped = false; // To prevent double jumps on ramp
+let gameOver = false;
+let score = 0;
+let startTime = 0;
+let elapsedTime = 0;
+
+// --- Helpers ---
+function createWheel() {
+    const geometry = new THREE.CylinderGeometry(0.6, 0.6, 0.4, 32);
+    const material = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    const wheel = new THREE.Mesh(geometry, material);
+    wheel.rotation.x = Math.PI / 2;
+    wheel.castShadow = true;
+    return wheel;
+}
+
+function createPineTree(x, z) {
+    const tree = new THREE.Group();
+
+    // Trunk
+    const trunkGeo = new THREE.CylinderGeometry(0.5, 0.8, 4, 8);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4d2926, roughness: 1.0 });
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = 2;
+    trunk.castShadow = true;
+    tree.add(trunk);
+
+    // Leaves (Cone layers)
+    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x0d2b0d, roughness: 0.8 });
+
+    const l1 = new THREE.Mesh(new THREE.ConeGeometry(3, 6, 8), leavesMat);
+    l1.position.y = 5;
+    l1.castShadow = true;
+    tree.add(l1);
+
+    const l2 = new THREE.Mesh(new THREE.ConeGeometry(2.5, 5, 8), leavesMat);
+    l2.position.y = 7.5;
+    l2.castShadow = true;
+    tree.add(l2);
+
+    const l3 = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 8), leavesMat);
+    l3.position.y = 9.5;
+    l3.castShadow = true;
+    tree.add(l3);
+
+    tree.position.set(x, 0, z);
+    return tree;
+}
+
+// --- Classes ---
+class Truck {
+    constructor(direction) {
+        // direction: 1 (Left to Right), -1 (Right to Left)
+        this.direction = direction;
+        this.mesh = new THREE.Group();
+
+        // --- SEMI-TRUCK LAYOUT ---
+        // Cab at FRONT (negative X), Trailer at BACK (positive X)
+
+        // --- CAB (Advanced Scania Style) - AT FRONT ---
+        const cabGroup = new THREE.Group();
+        cabGroup.position.set(-12, 0, 0); // Moved to FRONT
+        this.mesh.add(cabGroup);
+
+        // 1. Main Cab Body (Extruded for shape)
+        const cabShape = new THREE.Shape();
+        cabShape.moveTo(0, 0);
+        cabShape.lineTo(3, 0); // Width
+        cabShape.lineTo(3, 8); // Height back
+        cabShape.lineTo(0.5, 8); // Roof start
+        cabShape.lineTo(0, 6); // Windshield slope top
+        cabShape.lineTo(0, 2); // Windshield slope bottom / Nose
+        cabShape.lineTo(0, 0); // Bottom front
+
+        const cabExtrudeSettings = { depth: 3, bevelEnabled: true, bevelSize: 0.1, bevelThickness: 0.1 };
+        const cabGeo = new THREE.ExtrudeGeometry(cabShape, cabExtrudeSettings);
+        const cabMat = new THREE.MeshStandardMaterial({
+            color: TRUCK_BLUE,
+            roughness: 0.15,
+            metalness: 0.8,
+            envMapIntensity: 1.2
+        });
+        const cab = new THREE.Mesh(cabGeo, cabMat);
+        cab.position.set(-1.5, 1, -1.5);
+        cab.castShadow = true;
+        cab.receiveShadow = true;
+        cabGroup.add(cab);
+
+        // 2. Grill (Detailed)
+        const grillGroup = new THREE.Group();
+        grillGroup.position.set(-1.55, 3, 0);
+        cabGroup.add(grillGroup);
+
+        const grillBackGeo = new THREE.PlaneGeometry(2.5, 3.5);
+        const grillBackMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8 });
+        const grillBack = new THREE.Mesh(grillBackGeo, grillBackMat);
+        grillBack.rotation.y = -Math.PI / 2;
+        grillGroup.add(grillBack);
+
+        // Horizontal Bars
+        for (let i = 0; i < 6; i++) {
+            const barGeo = new THREE.BoxGeometry(0.1, 0.2, 2.4);
+            const barMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.8, roughness: 0.2 });
+            const bar = new THREE.Mesh(barGeo, barMat);
+            bar.position.set(-0.05, -1.5 + i * 0.6, 0);
+            grillGroup.add(bar);
+        }
+
+        // Scania Logo Area
+        const logoGeo = new THREE.BoxGeometry(0.15, 0.6, 1.2);
+        const logo = new THREE.Mesh(logoGeo, new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        logo.position.set(-0.05, 1.0, 0);
+        grillGroup.add(logo);
+
+        // 3. Bumper & Lights
+        const bumperGeo = new THREE.BoxGeometry(1.0, 1.2, 3.2);
+        const bumperMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+        const bumper = new THREE.Mesh(bumperGeo, bumperMat);
+        bumper.position.set(-1.2, 1.6, 0);
+        cabGroup.add(bumper);
+
+        // Headlights
+        const lightGeo = new THREE.BoxGeometry(0.1, 0.4, 0.6);
+        const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffffaa, emissiveIntensity: 0.8 });
+
+        const lLight = new THREE.Mesh(lightGeo, lightMat);
+        lLight.position.set(-1.71, 1.6, 1.1);
+        cabGroup.add(lLight);
+
+        const rLight = new THREE.Mesh(lightGeo, lightMat);
+        rLight.position.set(-1.71, 1.6, -1.1);
+        cabGroup.add(rLight);
+
+        // 4. Windshield
+        const glassGeo = new THREE.PlaneGeometry(2.5, 2.8);
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.0, metalness: 0.9 });
+        const glass = new THREE.Mesh(glassGeo, glassMat);
+        glass.position.set(-1.51, 7.2, 0);
+        glass.rotation.y = -Math.PI / 2;
+        glass.rotation.x = -0.1; // Slight tilt
+        cabGroup.add(glass);
+
+        // 5. Side Mirrors
+        const mirrorGeo = new THREE.BoxGeometry(0.5, 1.2, 0.2);
+        const mirrorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+        const lMirror = new THREE.Mesh(mirrorGeo, mirrorMat);
+        lMirror.position.set(-0.5, 7, 1.8);
+        lMirror.rotation.y = -0.2;
+        cabGroup.add(lMirror);
+
+        const rMirror = new THREE.Mesh(mirrorGeo, mirrorMat);
+        rMirror.position.set(-0.5, 7, -1.8);
+        rMirror.rotation.y = 0.2;
+        cabGroup.add(rMirror);
+
+        // --- TRAILER (Behind the cab) ---
+        // Front part of trailer (closer to cab)
+        const frontTrailerGeo = new THREE.BoxGeometry(4, 10, 3);
+        const trailerMat = new THREE.MeshStandardMaterial({
+            color: TRUCK_BLUE,
+            roughness: 0.2,
+            metalness: 0.7,
+            envMapIntensity: 1.0
+        });
+        const frontTrailer = new THREE.Mesh(frontTrailerGeo, trailerMat);
+        frontTrailer.position.set(0, 6, 0); // Right behind cab
+        frontTrailer.castShadow = true;
+        frontTrailer.receiveShadow = true;
+        this.mesh.add(frontTrailer);
+
+        // Back part of trailer (far end)
+        const backTrailerGeo = new THREE.BoxGeometry(4, 10, 3);
+        const backTrailer = new THREE.Mesh(backTrailerGeo, trailerMat);
+        backTrailer.position.set(18, 6, 0); // Gap is 0 to 18
+        backTrailer.castShadow = true;
+        backTrailer.receiveShadow = true;
+        this.mesh.add(backTrailer);
+
+        // Top Beam (Stretched) - Metallic
+        const topBeamGeo = new THREE.BoxGeometry(22, 1, 3);
+        const beamMat = new THREE.MeshStandardMaterial({
+            color: 0xaaaaaa,
+            roughness: 0.3,
+            metalness: 0.9
+        });
+        const topBeam = new THREE.Mesh(topBeamGeo, beamMat);
+        topBeam.position.set(9, 10.5, 0);
+        topBeam.castShadow = true;
+        this.mesh.add(topBeam);
+
+        // Bottom Platform - Dark metal
+        const bottomGeo = new THREE.BoxGeometry(22, 1, 3);
+        const bottomMat = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a,
+            roughness: 0.6,
+            metalness: 0.8
+        });
+        const bottom = new THREE.Mesh(bottomGeo, bottomMat);
+        bottom.position.set(9, 1.5, 0);
+        bottom.castShadow = true;
+        bottom.receiveShadow = true;
+        this.mesh.add(bottom);
+
+        // --- Wheels ---
+        // Cab wheels (front)
+        const w1 = createWheel(); w1.position.set(-12, 0.6, 1.3); this.mesh.add(w1);
+        const w2 = createWheel(); w2.position.set(-12, 0.6, -1.3); this.mesh.add(w2);
+        const w3 = createWheel(); w3.position.set(-8, 0.6, 1.3); this.mesh.add(w3);
+        const w4 = createWheel(); w4.position.set(-8, 0.6, -1.3); this.mesh.add(w4);
+        // Trailer wheels (back)
+        const w5 = createWheel(); w5.position.set(19, 0.6, 1.3); this.mesh.add(w5);
+        const w6 = createWheel(); w6.position.set(19, 0.6, -1.3); this.mesh.add(w6);
+
+        // Orientation
+        if (direction === -1) {
+            this.mesh.rotation.y = Math.PI; // Face left
+        }
+
+        // Spawn position
+        const startX = direction === 1 ? -100 : 100;
+        this.mesh.position.set(startX, 0, 0);
+
+        scene.add(this.mesh);
+        this.box = new THREE.Box3().setFromObject(this.mesh);
+    }
+
+    update(delta) {
+        this.mesh.position.x += this.direction * TRUCK_SPEED * delta;
+        this.box.setFromObject(this.mesh);
+    }
+
+    checkCollision(playerBox) {
+        if (!this.box.intersectsBox(playerBox)) return false;
+
+        // Detailed check
+        const truckPos = this.mesh.position;
+        const playerPos = player.position;
+
+        // Relative X (cab is at -12, gap is 0 to 18)
+        let localX = playerPos.x - truckPos.x;
+        if (this.direction === -1) localX = -localX;
+
+        // Gap is roughly 0 to 18 (between front and back trailer sections)
+        const gapStart = 0;
+        const gapEnd = 18;
+        const gapBottom = 2.0;
+        const gapTop = 10.0;
+
+        if (localX > gapStart && localX < gapEnd) {
+            // In gap horizontally
+            if (playerPos.y > gapBottom && playerPos.y < gapTop) {
+                return false; // Safe!
+            }
+        }
+
+        return true; // Crash
+    }
+
+    remove() {
+        scene.remove(this.mesh);
+    }
+}
+
+// --- Initialization ---
+function init() {
+    // Scene
+    scene = new THREE.Scene();
+
+    // Swedish Summer Sky - Beautiful gradient
+    const skyColor = new THREE.Color(0x87CEEB); // Light blue
+    const horizonColor = new THREE.Color(0xe8f4f8); // Almost white at horizon
+    scene.background = skyColor;
+    scene.fog = new THREE.Fog(horizonColor, 40, 150);
+
+    // Add sky gradient using a large sphere
+    const skyGeo = new THREE.SphereGeometry(500, 32, 15);
+    const skyMat = new THREE.ShaderMaterial({
+        uniforms: {
+            topColor: { value: new THREE.Color(0x4a90e2) }, // Deep blue
+            bottomColor: { value: new THREE.Color(0xe8f4f8) }, // Light horizon
+            offset: { value: 33 },
+            exponent: { value: 0.6 }
+        },
+        vertexShader: `
+            varying vec3 vWorldPosition;
+            void main() {
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vWorldPosition = worldPosition.xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 topColor;
+            uniform vec3 bottomColor;
+            uniform float offset;
+            uniform float exponent;
+            varying vec3 vWorldPosition;
+            void main() {
+                float h = normalize(vWorldPosition + offset).y;
+                gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+            }
+        `,
+        side: THREE.BackSide
+    });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(sky);
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 10, 60); // Behind player start
+    camera.lookAt(0, 0, 0);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: false }); // Disable built-in AA, we'll use SMAA
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    document.body.appendChild(renderer.domElement);
+
+    // Post-Processing
+    composer = new EffectComposer(renderer);
+
+    // Render Pass (base scene)
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    // Bloom Pass (glow effects)
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.5,  // strength
+        0.4,  // radius
+        0.85  // threshold
+    );
+    composer.addPass(bloomPass);
+
+    // SMAA Pass (anti-aliasing)
+    const smaaPass = new SMAAPass(window.innerWidth, window.innerHeight);
+    composer.addPass(smaaPass);
+
+    // Output Pass (gamma correction)
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+
+    // INTENSE REALISTIC LIGHTING
+    // Ambient light (very subtle)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    scene.add(ambientLight);
+
+    // Hemisphere light (sky/ground color)
+    const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x2d4a1e, 0.5);
+    scene.add(hemiLight);
+
+    // INTENSE SUN - Main directional light
+    const sunLight = new THREE.DirectionalLight(0xfff4e0, 3.5); // BRIGHT warm sunlight
+    sunLight.position.set(100, 120, 80);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 4096;
+    sunLight.shadow.mapSize.height = 4096;
+    sunLight.shadow.camera.top = 100;
+    sunLight.shadow.camera.bottom = -100;
+    sunLight.shadow.camera.left = -100;
+    sunLight.shadow.camera.right = 100;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 300;
+    sunLight.shadow.bias = -0.00005;
+    sunLight.shadow.normalBias = 0.02;
+    scene.add(sunLight);
+
+    // Fill light (cool, subtle)
+    const fillLight = new THREE.DirectionalLight(0x8ab4ff, 0.4);
+    fillLight.position.set(-50, 30, -50);
+    scene.add(fillLight);
+
+    // Rim light (backlight for depth)
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    rimLight.position.set(0, 20, -100);
+    scene.add(rimLight);
+
+    // Add visible SUN in the sky
+    const sunGeo = new THREE.SphereGeometry(15, 32, 32);
+    const sunMat = new THREE.MeshBasicMaterial({
+        color: 0xfffacd,
+        fog: false
+    });
+    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+    sunMesh.position.set(100, 120, 80); // Same as sunLight
+    scene.add(sunMesh);
+
+    // --- Environment ---
+    const groundGroup = new THREE.Group();
+    scene.add(groundGroup);
+
+    // Grass - More realistic
+    const grassGeo = new THREE.PlaneGeometry(200, 200, 50, 50);
+    const grassMat = new THREE.MeshStandardMaterial({
+        color: GRASS_COLOR,
+        roughness: 0.95,
+        metalness: 0.0
+    });
+    const grass = new THREE.Mesh(grassGeo, grassMat);
+    grass.rotation.x = -Math.PI / 2;
+    grass.receiveShadow = true;
+
+    // Add slight terrain variation
+    const positions = grass.geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+        const y = Math.random() * 0.3;
+        positions.setY(i, y);
+    }
+    positions.needsUpdate = true;
+    grass.geometry.computeVertexNormals();
+
+    groundGroup.add(grass);
+
+    // Trees (Swedish Forest)
+    for (let i = 0; i < 40; i++) {
+        const x = (Math.random() - 0.5) * 180;
+        const z = (Math.random() - 0.5) * 180;
+        // Don't spawn on road
+        if (Math.abs(x) < 15 || Math.abs(z) < 10) continue;
+
+        const tree = createPineTree(x, z);
+        groundGroup.add(tree);
+    }
+
+    // Road (Cross) - Realistic asphalt
+    const roadMat = new THREE.MeshStandardMaterial({
+        color: GROUND_COLOR,
+        roughness: 0.7,
+        metalness: 0.1
+    });
+
+    // Horizontal Road (Truck path)
+    const roadHGeo = new THREE.PlaneGeometry(200, 12);
+    const roadH = new THREE.Mesh(roadHGeo, roadMat);
+    roadH.rotation.x = -Math.PI / 2;
+    roadH.position.y = 0.05;
+    roadH.receiveShadow = true;
+    groundGroup.add(roadH);
+
+    // Vertical Road (Player path)
+    const roadVGeo = new THREE.PlaneGeometry(8, 200);
+    const roadV = new THREE.Mesh(roadVGeo, roadMat);
+    roadV.rotation.x = -Math.PI / 2;
+    roadV.position.y = 0.02;
+    roadV.receiveShadow = true;
+    groundGroup.add(roadV);
+
+    // Ramp
+    const rampShape = new THREE.Shape();
+    rampShape.moveTo(0, 0);
+    rampShape.lineTo(4, 0);
+    rampShape.lineTo(4, 2.5); // Height
+    rampShape.lineTo(0, 0);
+
+    const rampExtrudeSettings = { depth: 4, bevelEnabled: false };
+    const rampGeometry = new THREE.ExtrudeGeometry(rampShape, rampExtrudeSettings);
+    const rampMat = new THREE.MeshStandardMaterial({ color: RAMP_BLUE });
+    ramp = new THREE.Mesh(rampGeometry, rampMat);
+    // Position ramp
+    // Player comes from Z=50 towards Z=0.
+    // Ramp should be near trucks (Z=0). Let's put it at Z=10.
+    // Rotation Math.PI/2 makes the slope rise as Z decreases (Low at Z=10, High at Z=6).
+    ramp.rotation.y = Math.PI / 2;
+    ramp.position.set(-2, 0, 10);
+    ramp.castShadow = true;
+    ramp.receiveShadow = true;
+    scene.add(ramp);
+
+
+    // --- Player (COOLER BIKE) ---
+    player = new THREE.Group();
+
+    // Frame - Sleek sports bike
+    const frameMat = new THREE.MeshStandardMaterial({
+        color: 0xff0000,
+        metalness: 0.8,
+        roughness: 0.2,
+        envMapIntensity: 1.5
+    });
+
+    // Main frame
+    const mainFrameGeo = new THREE.BoxGeometry(0.15, 0.6, 1.4);
+    const mainFrame = new THREE.Mesh(mainFrameGeo, frameMat);
+    mainFrame.position.y = 0.9;
+    mainFrame.castShadow = true;
+    player.add(mainFrame);
+
+    // Fuel tank
+    const tankGeo = new THREE.BoxGeometry(0.4, 0.3, 0.8);
+    const tank = new THREE.Mesh(tankGeo, frameMat);
+    tank.position.set(0, 1.1, 0.1);
+    tank.castShadow = true;
+    player.add(tank);
+
+    // Wheels - Realistic tires
+    const wheelGeo = new THREE.TorusGeometry(0.45, 0.12, 12, 24);
+    const wheelMat = new THREE.MeshStandardMaterial({
+        color: 0x0a0a0a,
+        roughness: 0.8,
+        metalness: 0.1
+    });
+
+    const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+    frontWheel.position.set(0, 0.45, -0.7);
+    frontWheel.rotation.y = Math.PI / 2;
+    frontWheel.castShadow = true;
+    player.add(frontWheel);
+
+    const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
+    backWheel.position.set(0, 0.45, 0.7);
+    backWheel.rotation.y = Math.PI / 2;
+    backWheel.castShadow = true;
+    player.add(backWheel);
+
+    // Handlebars - Chrome
+    const handleGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.9);
+    const handleMat = new THREE.MeshStandardMaterial({
+        color: 0xdddddd,
+        metalness: 0.95,
+        roughness: 0.1
+    });
+    const handle = new THREE.Mesh(handleGeo, handleMat);
+    handle.position.set(0, 1.2, -0.5);
+    handle.rotation.z = Math.PI / 2;
+    handle.castShadow = true;
+    player.add(handle);
+
+    // Headlight
+    const headlightGeo = new THREE.SphereGeometry(0.15, 16, 16);
+    const headlightMat = new THREE.MeshStandardMaterial({
+        color: 0xffffee,
+        emissive: 0xffffaa,
+        emissiveIntensity: 2.0
+    });
+    const headlight = new THREE.Mesh(headlightGeo, headlightMat);
+    headlight.position.set(0, 1.0, -0.9);
+    player.add(headlight);
+
+    // Rider - Leaning forward (racing position)
+    const riderGeo = new THREE.BoxGeometry(0.5, 0.9, 0.35);
+    const riderMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, // Black leather jacket
+        roughness: 0.6,
+        metalness: 0.2
+    });
+    const rider = new THREE.Mesh(riderGeo, riderMat);
+    rider.position.set(0, 1.5, 0.2);
+    rider.rotation.x = 0.2; // Lean forward
+    rider.castShadow = true;
+    player.add(rider);
+
+    // Helmet - Glossy
+    const helmetGeo = new THREE.SphereGeometry(0.28, 20, 20);
+    const helmetMat = new THREE.MeshStandardMaterial({
+        color: 0xff0000,
+        metalness: 0.6,
+        roughness: 0.1
+    });
+    const helmet = new THREE.Mesh(helmetGeo, helmetMat);
+    helmet.position.set(0, 2.0, 0.1);
+    helmet.castShadow = true;
+    player.add(helmet);
+
+    scene.add(player);
+
+    // Initial Reset
+    resetGame();
+
+    // Event Listeners
+    window.addEventListener('resize', onWindowResize);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    // Start Loop
+    requestAnimationFrame(animate);
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onKeyDown(event) {
+    if (event.code === 'Space') {
+        if (gameOver) return;
+        isAccelerating = true;
+    }
+    if (event.code === 'KeyR' && gameOver) {
+        resetGame();
+    }
+}
+
+function onKeyUp(event) {
+    if (event.code === 'Space') {
+        isAccelerating = false;
+    }
+}
+
+function resetGame() {
+    gameOver = false;
+    trucks.forEach(t => t.remove());
+    trucks = [];
+
+    // Reset Player
+    player.position.set(0, 0, 50); // Start far back
+    playerVelocity.set(0, 0, 0);
+    isJumping = false;
+    hasJumped = false;
+
+    // Timer
+    startTime = Date.now();
+    elapsedTime = 0;
+
+    // Spawn Trucks
+    // We want them to arrive at X=0 roughly when player does.
+    // Distance for trucks to center: 80. Speed: 18. Time: ~4.4s.
+    // Player distance: 50. Max Speed 25. Accel time... 
+    // Let's just spawn them immediately for now and user has to time it.
+    trucks.push(new Truck(1)); // Left to Right
+    trucks.push(new Truck(-1)); // Right to Left
+
+    document.getElementById('info').innerText = "Hold SPACE to Accelerate";
+    document.getElementById('overlay').classList.add('hidden');
+}
+
+function animate(time) {
+    requestAnimationFrame(animate);
+
+    const delta = (time - lastTime) / 1000;
+    lastTime = time;
+
+    if (gameOver) return;
+
+    // Timer
+    elapsedTime = (Date.now() - startTime) / 1000;
+    document.getElementById('info').innerText = "Time: " + elapsedTime.toFixed(2) + "s";
+
+    // --- Player Physics ---
+    // Acceleration
+    if (isAccelerating) {
+        playerVelocity.z -= PLAYER_ACCEL * delta; // Moving towards negative Z
+    } else {
+        // Drag
+        if (playerVelocity.z < 0) playerVelocity.z += PLAYER_DRAG * delta;
+        if (playerVelocity.z > 0) playerVelocity.z = 0;
+    }
+
+    // Clamp Speed
+    if (playerVelocity.z < -PLAYER_MAX_SPEED) playerVelocity.z = -PLAYER_MAX_SPEED;
+
+    // Gravity
+    if (isJumping) {
+        playerVelocity.y -= GRAVITY * delta;
+    } else {
+        // Ground clamping
+        if (player.position.y > 0) {
+            playerVelocity.y -= GRAVITY * delta;
+        } else {
+            player.position.y = 0;
+            playerVelocity.y = 0;
+        }
+    }
+
+    // Apply Velocity
+    player.position.add(playerVelocity.clone().multiplyScalar(delta));
+
+    // Ground Collision (Simple)
+    if (player.position.y < 0) {
+        player.position.y = 0;
+        playerVelocity.y = 0;
+        isJumping = false;
+    }
+
+    // Ramp Trigger
+    // Ramp is at Z=10. Extends to Z=6 (roughly).
+    // Trigger when player is in [6, 14] range?
+    // Let's say Z < 14 and Z > 10.
+    if (!hasJumped && player.position.z < 14 && player.position.z > 10) {
+        // Check X
+        if (Math.abs(player.position.x) < 2) {
+            // Hit Ramp!
+            isJumping = true;
+            hasJumped = true;
+            playerVelocity.y = JUMP_FORCE;
+            // Boost forward slightly to ensure clearance
+            // playerVelocity.z *= 1.1; 
+        }
+    }
+
+    // --- Truck Updates ---
+    trucks.forEach(t => t.update(delta));
+
+    // --- Collision ---
+    const playerBox = new THREE.Box3().setFromObject(player);
+    playerBox.expandByScalar(-0.3);
+
+    for (const truck of trucks) {
+        if (truck.checkCollision(playerBox)) {
+            gameOver = true;
+            document.getElementById('info').innerText = "CRASH! Time: " + elapsedTime.toFixed(2) + "s - Press R";
+            // document.getElementById('overlay').classList.remove('hidden');
+            // document.getElementById('overlay-title').innerText = "CRASHED";
+        }
+    }
+
+    // --- Camera Follow ---
+    // Smooth follow
+    const targetPos = player.position.clone();
+    targetPos.y += 5;
+    targetPos.z += 15; // Behind
+
+    // Lerp camera
+    camera.position.lerp(targetPos, 0.1);
+    camera.lookAt(player.position.x, player.position.y + 2, player.position.z - 10);
+
+    composer.render();
+}
+
+init();

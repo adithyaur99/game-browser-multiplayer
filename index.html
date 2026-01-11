@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jump Through 2 Moving Trucks - Scania Red Bull Challenge</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="info">Hold SPACE to Accelerate</div>
+    <div id="start-screen">
+        <h1>JUMP THROUGH 2 MOVING TRUCKS</h1>
+        <p class="subtitle">Scania Red Bull Challenge</p>
+        <p class="difficulty-label">Select Difficulty</p>
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">EASY</button>
+            <button class="difficulty-btn" data-difficulty="medium">MEDIUM</button>
+            <button class="difficulty-btn selected" data-difficulty="hard">HARD</button>
+            <button class="difficulty-btn" data-difficulty="insane">INSANE</button>
+        </div>
+        <button id="start-btn">START</button>
+        <p class="controls"><kbd>SPACE</kbd> Accelerate &nbsp;&nbsp;|&nbsp;&nbsp; <kbd>R</kbd> Restart</p>
+    </div>
+    <div id="overlay" class="hidden">
+        <h1 id="overlay-title">CRASHED</h1>
+        <p id="overlay-message">Press R to restart</p>
+    </div>
+    <div class="instructions hidden">
+        <kbd>SPACE</kbd> Accelerate &nbsp;&nbsp;|&nbsp;&nbsp; <kbd>R</kbd> Restart
+    </div>
+    <script type="module" src="game.js"></script>
+</body>
+
+</html>
