@@ -43,9 +43,9 @@ canvas {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, rgba(10, 15, 30, 0.9) 0%, rgba(20, 30, 50, 0.85) 100%);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -55,21 +55,35 @@ canvas {
 }
 
 #overlay-title {
-    font-size: 56px;
-    font-weight: 800;
-    margin-bottom: 20px;
-    background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 50%, #6bcb77 100%);
+    font-size: 120px;
+    font-weight: 900;
+    margin-bottom: 30px;
+    background: linear-gradient(135deg, #ff4444 0%, #ff6b6b 50%, #ff8888 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-shadow: none;
-    letter-spacing: 2px;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+#overlay-title.success {
+    background: linear-gradient(135deg, #44ff44 0%, #6bff6b 50%, #88ff88 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.9; }
 }
 
 #overlay p {
-    font-size: 18px;
-    opacity: 0.8;
-    margin-top: 10px;
+    font-size: 28px;
+    opacity: 0.9;
+    margin-top: 20px;
+    letter-spacing: 2px;
 }
 
 #crosshair {

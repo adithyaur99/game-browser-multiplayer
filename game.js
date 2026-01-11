@@ -1254,11 +1254,11 @@ function updateUI() {
     const diffLabel = selectedDifficulty.toUpperCase();
 
     if (gameOver && !gameWon) {
-        infoEl.innerHTML = `<span style="color:#ff6b6b">CRASH!</span> Time: ${timeStr}s | ${diffLabel} | Press R to restart`;
+        infoEl.innerHTML = `<span style="color:#ff6b6b">CRASH!</span> Time: ${timeStr}s | ${diffLabel} | Press ENTER to restart`;
     } else if (gameWon) {
-        infoEl.innerHTML = `<span style="color:#6bcb77">SUCCESS!</span> Time: ${timeStr}s | ${diffLabel} ${bestStr} | Press R to play again`;
+        infoEl.innerHTML = `<span style="color:#6bcb77">SUCCESS!</span> Time: ${timeStr}s | ${diffLabel} ${bestStr} | Press ENTER to play again`;
     } else if (gameFailed) {
-        infoEl.innerHTML = `<span style="color:#ff6b6b">FAILED!</span> Time: ${timeStr}s | ${diffLabel} | Press R to restart`;
+        infoEl.innerHTML = `<span style="color:#ff6b6b">FAILED!</span> Time: ${timeStr}s | ${diffLabel} | Press ENTER to restart`;
     } else {
         infoEl.innerHTML = `${diffLabel} | Time: ${timeStr}s | Speed: ${speed} km/h ${bestStr ? '| ' + bestStr : ''}`;
     }
@@ -2027,13 +2027,15 @@ function onWindowResize() {
 function onKeyDown(event) {
     if (event.code === 'Space') {
         event.preventDefault();
-        if (!gameOver && !gameWon) {
+        if (gameStarted && !gameOver && !gameWon && !gameFailed) {
             isAccelerating = true;
         }
     }
-    if (event.code === 'KeyR') {
+    if (event.code === 'Enter') {
         event.preventDefault();
-        resetGame();
+        if (gameOver || gameWon || gameFailed) {
+            resetGame();
+        }
     }
 }
 
@@ -2127,7 +2129,7 @@ function animate(time) {
             } else {
                 // Jumped too early or too late - immediate fail
                 gameFailed = true;
-                showOverlay('FAILED', 'Bad timing! Press R to restart');
+                showOverlay('FAILED', 'Bad timing! Press ENTER to restart');
             }
         }
 
@@ -2178,7 +2180,7 @@ function animate(time) {
                 bestTime = elapsedTime;
                 localStorage.setItem('bestTime', bestTime.toString());
             }
-            showOverlay('SUCCESS!', 'You made it! Press R to play again');
+            showOverlay('SUCCESS!', 'You made it! Press ENTER to play again');
             updateUI();
         }
     }
@@ -2196,6 +2198,7 @@ function animate(time) {
                 gameOver = true;
                 // Trigger realistic crash physics
                 initCrash(truck.getDirection(), TRUCK_SPEED);
+                showOverlay('CRASHED!', 'Press ENTER to restart');
                 updateUI();
                 break;
             }
